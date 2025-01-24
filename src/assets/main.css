@@ -1,0 +1,101 @@
+@import "tailwindcss";
+@import "@vue-flow/core/dist/style.css";
+@import "@vue-flow/core/dist/theme-default.css";
+
+/* Base styles */
+html, body, #app {
+ margin: 0;
+ height: 100%;
+ background: #1a1a1a;
+}
+
+.vue-flow {
+ background: #1e1e1e;
+ background-image:
+   radial-gradient(#2a2a2a 1px, transparent 1px),
+   radial-gradient(#2a2a2a 1px, transparent 1px);
+ background-size: 20px 20px;
+}
+
+/* Nodes */
+.vue-flow__node {
+ min-width: 150px;
+ border-radius: 8px;
+ background: rgba(30, 30, 30, 0.95);
+ border: 1px solid rgba(100, 100, 255, 0.3);
+ box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+ backdrop-filter: blur(8px);
+}
+
+.vue-flow__node:hover {
+ border-color: rgba(100, 100, 255, 0.6);
+ transform: translateY(-2px);
+ transition: all 0.3s ease;
+}
+
+/* Edges */
+.vue-flow__edge-path {
+ stroke: rgba(100, 100, 255, 0.6);
+ stroke-width: 2;
+ filter: drop-shadow(0 0 8px rgba(100, 100, 255, 0.4));
+}
+
+.vue-flow__edge.selected .vue-flow__edge-path {
+ stroke: rgba(100, 200, 255, 0.8);
+ stroke-width: 3;
+}
+
+/* Connection lines animation */
+.vue-flow__edges path {
+ stroke-dasharray: 10;
+ animation: flowingLine 1.5s linear infinite;
+}
+
+@keyframes flowingLine {
+ from {
+   stroke-dashoffset: 20;
+ }
+ to {
+   stroke-dashoffset: 0;
+ }
+}
+
+/* Connection handles */
+.vue-flow__handle {
+ width: 12px;
+ height: 12px;
+ border-radius: 6px;
+ background: rgba(30, 30, 30, 0.95);
+ border: 2px solid rgba(100, 100, 255, 0.6);
+ box-shadow: 0 0 8px rgba(100, 100, 255, 0.4);
+}
+
+.vue-flow__handle:hover {
+ background: rgba(100, 100, 255, 0.3);
+ transform: scale(1.2);
+ transition: all 0.2s ease;
+}
+
+/* States */
+.vue-flow__node.processing {
+ border-color: rgba(100, 200, 255, 0.8);
+ box-shadow: 0 0 20px rgba(100, 200, 255, 0.4);
+ animation: pulse 1.5s infinite;
+}
+
+.vue-flow__node.completed {
+ border-color: rgba(100, 255, 100, 0.8);
+ box-shadow: 0 0 20px rgba(100, 255, 100, 0.4);
+}
+
+@keyframes pulse {
+ 0% {
+   box-shadow: 0 0 20px rgba(100, 200, 255, 0.4);
+ }
+ 50% {
+   box-shadow: 0 0 30px rgba(100, 200, 255, 0.6);
+ }
+ 100% {
+   box-shadow: 0 0 20px rgba(100, 200, 255, 0.4);
+ }
+}
