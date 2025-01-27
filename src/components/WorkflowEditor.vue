@@ -1,70 +1,305 @@
+<!-- WorkflowEditor.vue -->
 <template>
     <div class="relative h-full">
-        <VueFlow v-model:nodes="nodes" v-model:edges="edges" :class="{ 'simulation-mode': simulationMode }"
-            @connect="onConnect" @dragover.prevent @drop="onDrop">
-            <Controls @simulate="startSimulation" @export="exportFlow" @import="importFlow" @clear="clearLogs"
-                @toggle-logs="toggleLogs" :speed="simulationSpeed" @change-speed="changeSimulationSpeed" />
+        <!-- Save Modal -->
+        <div v-if="showSaveDialog"
+             class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div class="bg-gray-800 p-6 rounded-lg w-[425px] max-w-full mx-4">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-semibold text-white">Save Diagram</h2>
+                    <button @click="showSaveDialog = false" class="text-gray-400 hover:text-white">
+                        <XIcon class="w-5 h-5" />
+                    </button>
+                </div>
+
+                <div class="space-y-4">
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-gray-200">Name</label>
+                        <input v-model="diagramName"
+                               type="text"
+                               placeholder="Enter diagram name"
+                               class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white" />
+                    </div>
+
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-gray-200">Description</label>
+                        <textarea v-model="diagramDescription"
+                                  rows="3"
+                                  placeholder="Enter diagram description"
+                                  class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white resize-none"></textarea>
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-3 mt-6">
+                    <button @click="showSaveDialog = false"
+                            class="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600">
+                        Cancel
+                    </button>
+                    <button @click="saveDiagram"
+                            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500">
+                        Save
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Load Diagrams Sidebar -->
+        <div v-if="showSidebar"
+            class="fixed left-0 top-0 h-full w-64 bg-gray-800 text-white p-4 z-50 overflow-y-auto">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-semibold">Flow Diagrams</h2>
+                <button @click="showSidebar = false" class="text-gray-400 hover:text-white">
+                    <XIcon class="w-5 h-5" />
+                </button>
+            </div>
+
+            <button @click="createNewDiagram"
+                    class="w-full bg-blue-600 text-white px-4 py-2 rounded-lg mb-4 flex items-center justify-center gap-2">
+                <PlusIcon class="w-4 h-4" />
+                New Diagram
+            </button>
+
+            <div class="space-y-2">
+                <div v-for="diagram in savedDiagrams"
+                    :key="diagram.id"
+                    class="bg-gray-700 p-3 rounded-lg">
+                    <div class="flex justify-between items-center">
+                        <span class="font-medium">{{ diagram.name }}</span>
+                        <div class="flex gap-2">
+                            <button @click="loadDiagram(diagram)"
+                                    class="text-blue-400 hover:text-blue-300">
+                                <EditIcon class="w-4 h-4" />
+                            </button>
+                            <button @click="deleteDiagram(diagram)"
+                                    class="text-red-400 hover:text-red-300">
+                                <TrashIcon class="w-4 h-4" />
+                            </button>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-400 mt-1">{{ diagram.description || 'No description' }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Simulation Progress -->
+        <div v-if="simulationState.isRunning"
+             class="fixed bottom-4 right-4 bg-gray-800 p-4 rounded-lg shadow-lg text-white z-50">
+            <h3 class="text-lg font-semibold mb-2">Simulation Progress</h3>
+            <div class="space-y-1">
+                <p>Current Node: {{ simulationState.currentNodeId || 'None' }}</p>
+                <p>Completed: {{ Object.values(simulationState.nodeStatuses).filter(s => s === 'completed').length }} / {{ nodes.length }}</p>
+                <div v-if="Object.keys(simulationState.variables).length > 0">
+                    <h4 class="text-sm font-semibold mt-2">Variables:</h4>
+                    <div class="text-sm opacity-80">
+                        <div v-for="(value, key) in simulationState.variables" :key="key">
+                            {{ key }}: {{ value }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Flow Editor -->
+        <VueFlow v-model:nodes="nodes"
+                 v-model:edges="edges"
+                 :class="{ 'simulation-mode': simulationState.isRunning }"
+                 @connect="onConnect"
+                 @dragover.prevent
+                 @drop="onDrop">
+
+            <!-- Controls -->
+            <Controls @simulate="startSimulation"
+                     @export="exportFlow"
+                     @import="importFlow"
+                     @clear="clearLogs"
+                     @toggle-logs="toggleLogs"
+                     @save="showSaveDialog = true"
+                     @load="showSidebar = true"
+                     :speed="simulationSpeed"
+                     @change-speed="changeSimulationSpeed" />
+
             <Background />
 
-            <SimulationLogs :logs="simulationLogs" :simulation-mode="simulationMode" @clear="clearLogs"
-                v-if="showLogs" />
+            <!-- Simulation Logs -->
+            <SimulationLogs v-if="showLogs"
+                           :logs="simulationLogs"
+                           :simulation-mode="simulationState.isRunning"
+                           @clear="clearLogs" />
 
-            <template v-for="(nodeComponent, nodeType) in nodeComponents" :key="nodeType"
-                #[`node-${nodeType}`]="nodeProps">
-                <component :is="nodeComponent" v-bind="nodeProps" :class="{
-                    'processing': getSimulationStep(nodeProps.id)?.status === 'processing',
-                    'completed': getSimulationStep(nodeProps.id)?.status === 'completed'
-                }" :simulation-step="getSimulationStep(nodeProps.id)" :output="nodeOutputs[nodeProps.id]"
-                    @delete="() => removeNode(nodeProps.id)" />
+            <!-- Node Components -->
+            <template v-for="(nodeComponent, nodeType) in nodeComponents"
+                    :key="nodeType"
+                    #[`node-${nodeType}`]="nodeProps">
+                <component :is="nodeComponent"
+                        v-bind="nodeProps"
+                        :class="[
+                            nodeProps.class,
+                            getNodeClass(nodeProps),
+                            simulationState.isRunning ? 'simulation-active' : ''
+                        ]"
+                        :output="nodeOutputs[nodeProps.id]"
+                        @delete="() => removeNode(nodeProps.id)" />
             </template>
         </VueFlow>
     </div>
 </template>
 
-
 <script setup>
-import { ref, reactive, onMounted, markRaw } from "vue";
+import { ref, reactive, onMounted, markRaw } from 'vue';
 import { VueFlow, useVueFlow } from "@vue-flow/core";
 import { Background } from "@vue-flow/background";
-import SimulationLogs from "./SimulationLogs.vue";
-import Controls from "./Controls.vue";
+import { XIcon, PlusIcon, EditIcon, TrashIcon } from 'lucide-vue-next';
+import DiagramService from './services/DiagramService';
+import SimulationService from './services/SimulationService';
+import SimulationLogs from './SimulationLogs.vue';
+import Controls from './Controls.vue';
 
-const showLogs = ref(true);
-const simulationSpeed = ref(1000); // Adjustable simulation speed (default: 1 second per step)
-const simulationMode = ref(false);
-const simulationSteps = reactive([]); // Change to `reactive` for consistency
+const showSidebar = ref(false);
+const savedDiagrams = ref([]);
+const currentDiagramId = ref(null);
+
+// Load functions
+async function loadSavedDiagrams() {
+    try {
+        savedDiagrams.value = await DiagramService.fetchAll();
+    } catch (error) {
+        console.error('Failed to load diagrams:', error);
+        alert('Failed to load saved diagrams');
+    }
+}
+
+async function loadDiagram(diagram) {
+    try {
+        const loadedDiagram = await DiagramService.fetch(diagram.id);
+        nodes.value = loadedDiagram.nodes;
+        edges.value = loadedDiagram.edges;
+        currentDiagramId.value = diagram.id;
+        diagramName.value = diagram.name;
+        diagramDescription.value = diagram.description || '';
+        showSidebar.value = false;
+    } catch (error) {
+        console.error('Failed to load diagram:', error);
+        alert('Failed to load diagram');
+    }
+}
+
+function createNewDiagram() {
+    nodes.value = [];
+    edges.value = [];
+    currentDiagramId.value = null;
+    diagramName.value = '';
+    diagramDescription.value = '';
+    showSidebar.value = false;
+}
+
+async function deleteDiagram(diagram) {
+    if (!confirm('Are you sure you want to delete this diagram?')) return;
+
+    try {
+        await DiagramService.destroy(diagram.id);
+        savedDiagrams.value = savedDiagrams.value.filter(d => d.id !== diagram.id);
+
+        if (currentDiagramId.value === diagram.id) {
+            createNewDiagram();
+        }
+    } catch (error) {
+        console.error('Failed to delete diagram:', error);
+        alert('Failed to delete diagram');
+    }
+}
+
+// Initialize Services
+const simulationService = new SimulationService();
+
+// Flow State
 const nodes = ref([]);
 const edges = ref([]);
+const nodeComponents = reactive({});
+const { addEdges, removeNodes, addNodes, toObject } = useVueFlow();
+
+// Simulation State
+const showLogs = ref(true);
+const simulationSpeed = ref(1000);
 const simulationLogs = ref([]);
 const nodeOutputs = reactive({});
 
-const { addEdges, removeNodes, addNodes, toObject } = useVueFlow();
-const nodeComponents = reactive({});
-const nodeFiles = import.meta.glob("./nodes/*.vue");
+const simulationState = reactive({
+    isRunning: false,
+    currentNodeId: null,
+    nodeStatuses: {},
+    variables: {}
+});
 
+// UI State
+const showSaveDialog = ref(false);
+const diagramName = ref('');
+const diagramDescription = ref('');
+
+// Setup simulation service callbacks
+simulationService.onNodeStatusChange = (statuses, currentNodeId) => {
+    console.log('Status Update:', { statuses, currentNodeId }); // Debug log
+    simulationState.nodeStatuses = { ...statuses };
+    simulationState.currentNodeId = currentNodeId;
+
+    // Force Vue to update the node classes
+    nodes.value = nodes.value.map(node => ({
+        ...node,
+        class: getNodeClass({ id: node.id })
+    }));
+};
+
+simulationService.onLogAdded = (message, type) => {
+    simulationLogs.value.push({
+        message,
+        type,
+        timestamp: new Date()
+    });
+};
+
+simulationService.onVariablesChange = (variables) => {
+    simulationState.variables = { ...variables };
+};
+
+// Load Node Components
 onMounted(async () => {
+    const nodeFiles = import.meta.glob('./nodes/*.vue');
     for (const path in nodeFiles) {
-        const fileName = path.split("/").pop().replace(".vue", "");
-        const nodeType = fileName.toLowerCase().replace("node", "");
+        const fileName = path.split('/').pop().replace('.vue', '');
+        const nodeType = fileName.toLowerCase().replace('node', '');
         const module = await nodeFiles[path]();
         nodeComponents[nodeType] = markRaw(module.default);
     }
+
+    // Load saved diagrams
+    await loadSavedDiagrams();
 });
 
-/**
- * Retrieves the simulation step for a given node ID.
- * Returns `null` if no simulation step exists for the given node.
- * @param {string} nodeId - The ID of the node.
- * @returns {Object|null} Simulation step or null if not found.
- */
-function getSimulationStep(nodeId) {
-    return simulationSteps.find((step) => step.id === nodeId) || null;
+// Diagram Management Functions
+async function saveDiagram() {
+    if (!diagramName.value.trim()) {
+        alert('Please enter a diagram name');
+        return;
+    }
+
+    try {
+        const diagramData = {
+            name: diagramName.value,
+            description: diagramDescription.value,
+            nodes: nodes.value,
+            edges: edges.value
+        };
+
+        await DiagramService.store(diagramData);
+        showSaveDialog.value = false;
+        diagramName.value = '';
+        diagramDescription.value = '';
+    } catch (error) {
+        console.error('Failed to save diagram:', error);
+        alert('Failed to save diagram');
+    }
 }
 
-function toggleLogs() {
-    showLogs.value = !showLogs.value;
-}
-
+// Flow Management Functions
 function onConnect(params) {
     addEdges([params]);
 }
@@ -76,7 +311,7 @@ function removeNode(nodeId) {
 
 function onDrop(event) {
     event.preventDefault();
-    const nodeTypeData = event.dataTransfer.getData("application/nodeType");
+    const nodeTypeData = event.dataTransfer.getData('application/nodeType');
     if (!nodeTypeData) return;
 
     const { type, initialData } = JSON.parse(nodeTypeData);
@@ -88,167 +323,97 @@ function onDrop(event) {
             y: event.clientY - event.target.getBoundingClientRect().top,
         },
         data: initialData,
-        class: "",
+        class: '',
     };
     addNodes([newNode]);
 }
 
-async function startSimulation() {
-    simulationLogs.value = [];
-    const workflowData = toObject();
-    const { nodes: workflowNodes, edges: workflowEdges } = workflowData;
-
-    if (workflowNodes.length === 0) {
-        alert("No nodes to simulate");
-        return;
-    }
-
-    simulationMode.value = true;
-    simulationSteps.value = [];
-    nodes.value = nodes.value.map((node) => ({ ...node, class: "" }));
-
-    const startNodes = workflowNodes.filter(
-        (node) => !workflowEdges.some((edge) => edge.target === node.id)
-    );
-
-    for (const startNode of startNodes) {
-        await processNodeSequentially(startNode, workflowNodes, workflowEdges);
-    }
-
-    simulationMode.value = false;
-}
-
-async function processNodeSequentially(node, allNodes, edges) {
-    addLog(`Processing node: ${node.type} (${node.id})`, "info");
-    updateNodeStatus(node.id, "processing");
-
-    await delay(simulationSpeed.value);
-
-    // Fetch input from connected source nodes
-    const inputValue = getInputValue(node, edges, allNodes);
-
-    // Process the node with its data and input
-    const output = await processNode(node, inputValue);
-    nodeOutputs[node.id] = output;
-
-    updateNodeStatus(node.id, "completed");
-
-    // Propagate the output to connected nodes
-    const outgoingEdges = edges.filter((edge) => edge.source === node.id);
-    for (const edge of outgoingEdges) {
-        const nextNode = allNodes.find((n) => n.id === edge.target);
-        if (nextNode) {
-            const shouldFollow = node.type === "if"
-                ? edge.sourceHandle === (output ? "true" : "false")
-                : true; // Default true for non-condition nodes
-
-            if (shouldFollow) {
-                await processNodeSequentially(nextNode, allNodes, edges);
-            }
-        }
-    }
-}
-
-function getInputValue(node, edges, allNodes) {
-    const incomingEdges = edges.filter((edge) => edge.target === node.id);
-    const inputValues = {};
-
-    incomingEdges.forEach((edge) => {
-        const sourceNode = allNodes.find((n) => n.id === edge.source);
-        if (sourceNode && nodeOutputs[sourceNode.id]) {
-            Object.assign(inputValues, nodeOutputs[sourceNode.id]);
-        }
+function getNodeClass(nodeProps) {
+    // Debug the current node status
+    console.log('Node Status:', {
+        id: nodeProps.id,
+        currentNode: simulationState.currentNodeId,
+        status: simulationState.nodeStatuses[nodeProps.id],
+        isCurrentNode: nodeProps.id === simulationState.currentNodeId
     });
 
-    // For "if" node, return the relevant input key or fallback to the full object
-    return inputValues;
+    const status = simulationState.nodeStatuses[nodeProps.id];
+    const isCurrentNode = nodeProps.id === simulationState.currentNodeId;
+
+    // Return object with all classes explicitly set
+    return {
+        'simulation-node': true,
+        'current': isCurrentNode,
+        'processing': status === 'processing',
+        'completed': status === 'completed',
+        'error': status === 'error',
+        'highlight': isCurrentNode && status === 'processing'
+    };
 }
 
-async function processNode(node, inputValue) {
-    let output = {};
-    switch (node.type) {
-        case "variable":
-            output = { [node.data.outputKey]: node.data.initialValue };
-            break;
-        case "if":
-            output = evaluateCondition(node.data, inputValue);
-            break;
-        case "api":
-            output = await simulateApiCall(node.data);
-            break;
-        case "notification":
-            const message = node.data.message.replace(/\{\{(\w+)\}\}/g, (_, key) => inputValue[key] || `{{${key}}}`);
-            addLog(`Notification: ${message}`, node.data.type);
-            output = null;
-            break;
-        default:
-            output = node.data || {};
-    }
-    addLog(`Node output: ${JSON.stringify(output)}`, "success");
-    return output;
+function toggleLogs() {
+    showLogs.value = !showLogs.value;
 }
 
-
-function updateNodeStatus(nodeId, status) {
-    nodes.value = nodes.value.map((n) =>
-        n.id === nodeId ? { ...n, class: status } : n
-    );
-}
-
-function addLog(message, type = "info") {
-    simulationLogs.value.push({ message, type, timestamp: new Date() });
+function clearLogs() {
+    simulationLogs.value = [];
 }
 
 function changeSimulationSpeed(newSpeed) {
     simulationSpeed.value = newSpeed;
+    simulationService.setSimulationSpeed(newSpeed);
 }
 
-function delay(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-}
+async function startSimulation() {
+    try {
+        simulationLogs.value = [];
+        resetSimulationState(); // Reset before starting
+        simulationState.isRunning = true;
+        simulationService.setSimulationSpeed(simulationSpeed.value);
 
-function simulateApiCall(apiData) {
-    return new Promise((resolve) =>
-        setTimeout(() => resolve({ status: "success", data: apiData }), 1000)
-    );
-}
-
-function evaluateCondition(nodeData, inputValue) {
-    const { conditionType, expectedValue } = nodeData;
-    const actualValue = inputValue?.status || inputValue; // Adjust based on your input data structure
-
-    switch (conditionType) {
-        case "equals":
-            return String(actualValue) === String(expectedValue);
-        case "notEquals":
-            return String(actualValue) !== String(expectedValue);
-        case "contains":
-            return String(actualValue).includes(String(expectedValue));
-        case "changed":
-            return actualValue !== nodeData.previousValue;
-        default:
-            console.error(`Unknown condition type: ${conditionType}`);
-            return false;
+        const workflowData = toObject();
+        await simulationService.processFlow(workflowData.nodes, workflowData.edges);
+    } catch (error) {
+        console.error('Simulation failed:', error);
+    } finally {
+        // Add small delay before resetting to show the final state briefly
+        setTimeout(() => {
+            resetSimulationState();
+        }, 1000);
     }
 }
 
+function resetSimulationState() {
+    simulationState.isRunning = false;
+    simulationState.currentNodeId = null;
+    simulationState.nodeStatuses = {};
+    simulationState.variables = {};
+
+    // Reset all node classes
+    nodes.value = nodes.value.map(node => ({
+        ...node,
+        class: ''
+    }));
+}
+
+// Export/Import Functions
 function exportFlow() {
     const flowData = { nodes: nodes.value, edges: edges.value };
     const blob = new Blob([JSON.stringify(flowData, null, 2)], {
-        type: "application/json",
+        type: 'application/json',
     });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
+    const a = document.createElement('a');
     a.href = url;
-    a.download = "workflow.json";
+    a.download = 'workflow.json';
     a.click();
     URL.revokeObjectURL(url);
 }
 
 function importFlow() {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".json";
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
     input.onchange = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -258,31 +423,83 @@ function importFlow() {
             nodes.value = data.nodes;
             edges.value = data.edges;
         } catch (error) {
-            console.error("Import error:", error);
+            console.error('Import error:', error);
+            alert('Failed to import diagram');
         }
     };
     input.click();
 }
-
-function clearLogs() {
-    simulationLogs.value = [];
-}
 </script>
 
 <style>
-/* Improved styles for better simulation visibility */
 .vue-flow__node {
-    transition: all 0.3s ease;
+    transition: all 0.3s ease !important;
 }
 
 .simulation-mode .vue-flow__node {
+    opacity: 0.5 !important;
+}
+
+.vue-flow__node.simulation-node {
     opacity: 0.5;
+}
+
+.vue-flow__node.current {
+    opacity: 1 !important;
+    z-index: 9999 !important;
+    background-color: rgba(66, 153, 225, 0.1) !important;
+    border: 3px solid #4299e1 !important;
+    box-shadow:
+        0 0 0 4px rgba(66, 153, 225, 0.2),
+        0 0 20px rgba(66, 153, 225, 0.4),
+        0 0 40px rgba(66, 153, 225, 0.2) !important;
+    animation: nodeGlow 1.5s ease-in-out infinite !important;
+}
+
+@keyframes nodeGlow {
+    0%, 100% {
+        box-shadow:
+            0 0 0 4px rgba(66, 153, 225, 0.2),
+            0 0 20px rgba(66, 153, 225, 0.4),
+            0 0 40px rgba(66, 153, 225, 0.2);
+    }
+    50% {
+        box-shadow:
+            0 0 0 6px rgba(66, 153, 225, 0.3),
+            0 0 30px rgba(66, 153, 225, 0.5),
+            0 0 50px rgba(66, 153, 225, 0.3);
+    }
+}
+
+@keyframes nodePulse {
+    0% {
+        transform: scale(1.1) !important;
+        box-shadow:
+            0 0 0 4px rgba(66, 153, 225, 0.2),
+            0 0 20px rgba(66, 153, 225, 0.4),
+            0 0 40px rgba(66, 153, 225, 0.2);
+    }
+    50% {
+        transform: scale(1.15) !important;
+        box-shadow:
+            0 0 0 6px rgba(66, 153, 225, 0.3),
+            0 0 30px rgba(66, 153, 225, 0.5),
+            0 0 50px rgba(66, 153, 225, 0.3);
+    }
+    100% {
+        transform: scale(1.1) !important;
+        box-shadow:
+            0 0 0 4px rgba(66, 153, 225, 0.2),
+            0 0 20px rgba(66, 153, 225, 0.4),
+            0 0 40px rgba(66, 153, 225, 0.2);
+    }
 }
 
 .vue-flow__node.processing {
     opacity: 1 !important;
     border: 2px solid #4299e1 !important;
     box-shadow: 0 0 20px rgba(74, 144, 226, 0.7) !important;
+    animation: nodeProcessing 1.5s infinite;
 }
 
 .vue-flow__node.completed {
@@ -291,8 +508,67 @@ function clearLogs() {
     box-shadow: 0 0 20px rgba(39, 174, 96, 0.7) !important;
 }
 
+.vue-flow__node.error {
+    opacity: 1 !important;
+    border: 2px solid #f56565 !important;
+    box-shadow: 0 0 20px rgba(245, 101, 101, 0.7) !important;
+}
+
+.vue-flow__node.highlight {
+    opacity: 1 !important;
+}
+
+.vue-flow__edge {
+    transition: all 0.3s ease;
+}
+
+.vue-flow__edge.active {
+    stroke: #4299e1 !important;
+    stroke-width: 3px !important;
+    filter: drop-shadow(0 0 5px rgba(66, 153, 225, 0.5));
+}
+
 .vue-flow__edge.active path {
-    stroke: #4299e1;
-    stroke-width: 3;
+    stroke-dasharray: 5;
+    animation: flowEdge 1s linear infinite;
+}
+
+@keyframes nodeProcessing {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.02); }
+    100% { transform: scale(1); }
+}
+
+@keyframes nodeHighlight {
+    0% {
+        transform: scale(1.05);
+        box-shadow:
+            0 0 0 2px rgba(66, 153, 225, 0.3),
+            0 0 15px 2px rgba(66, 153, 225, 0.5),
+            0 0 30px 4px rgba(66, 153, 225, 0.3);
+    }
+    50% {
+        transform: scale(1.1);
+        box-shadow:
+            0 0 0 3px rgba(66, 153, 225, 0.4),
+            0 0 20px 3px rgba(66, 153, 225, 0.6),
+            0 0 40px 6px rgba(66, 153, 225, 0.4);
+    }
+    100% {
+        transform: scale(1.05);
+        box-shadow:
+            0 0 0 2px rgba(66, 153, 225, 0.3),
+            0 0 15px 2px rgba(66, 153, 225, 0.5),
+            0 0 30px 4px rgba(66, 153, 225, 0.3);
+    }
+}
+
+@keyframes flowEdge {
+    0% {
+        stroke-dashoffset: 10;
+    }
+    100% {
+        stroke-dashoffset: 0;
+    }
 }
 </style>
