@@ -16,11 +16,9 @@
         <div class="space-y-4">
             <div class="space-y-2">
                 <label class="text-xs uppercase tracking-wider text-purple-400">Model</label>
-                <select v-model="data.modelName"
-                    class="w-full bg-gray-800 border-0 rounded-lg focus:ring-2 focus:ring-purple-500 text-gray-100">
-                    <option value="User">User</option>
-                    <option value="Product">Product</option>
-                    <option value="Order">Order</option>
+                <select v-model="data.modelName" @change="fetchFields"
+                class="w-full bg-gray-800 border-0 rounded-lg focus:ring-2 focus:ring-purple-500 text-gray-100">
+                <option v-for="model in availableModels" :key="model" :value="model">{{ model }}</option>
                 </select>
             </div>
 
@@ -38,12 +36,12 @@
             <div class="space-y-2">
                 <label class="text-xs uppercase tracking-wider text-purple-400">Watch Fields</label>
                 <div class="bg-gray-800 rounded-lg p-3 space-y-2">
-                    <label v-for="field in availableFields" :key="field"
-                        class="flex items-center gap-2 text-gray-300 hover:text-purple-400 transition-colors cursor-pointer">
-                        <input type="checkbox" :value="field" v-model="data.watchFields"
-                            class="rounded border-0 bg-gray-700 text-purple-500 focus:ring-purple-500" />
-                        <span class="text-sm">{{ field }}</span>
-                    </label>
+                <label v-for="field in availableFields" :key="field"
+                    class="flex items-center gap-2 text-gray-300 hover:text-purple-400 transition-colors cursor-pointer">
+                    <input type="checkbox" :value="field" v-model="data.watchFields"
+                    class="rounded border-0 bg-gray-700 text-purple-500 focus:ring-purple-500" />
+                    <span class="text-sm">{{ field }}</span>
+                </label>
                 </div>
             </div>
 
@@ -58,6 +56,20 @@
                 <input v-model="data.outputValue" :placeholder="getOutputPlaceholder"
                     class="w-full bg-gray-800 border-0 rounded-lg focus:ring-2 focus:ring-purple-500 text-gray-100" />
             </div>
+
+            <div class="space-y-2">
+            <label class="flex items-center gap-2">
+                <input
+                    type="checkbox"
+                    v-model="data.testMode"
+                    class="rounded border-0 bg-gray-700 text-purple-500 focus:ring-purple-500"
+                />
+                <span class="text-xs uppercase tracking-wider text-purple-400">
+                    Test Mode
+                </span>
+            </label>
+        </div>
+
         </div>
 
         <!-- Connection Point -->
@@ -69,35 +81,51 @@
 </template>
 
 <script setup>
-import { Handle } from '@vue-flow/core'
-import { XIcon, BellIcon } from 'lucide-vue-next'
-import { defineOptions, computed } from 'vue'
+import { ref, onMounted } from 'vue';
+import { BellIcon, XIcon } from 'lucide-vue-next';
+import { Handle } from '@vue-flow/core';
 
-const props = defineProps(['data'])
+const props = defineProps(['data']);
+const emit = defineEmits(['delete']);
 
-const availableFields = computed(() => {
-    switch (props.data.modelName) {
-        case 'User': return ['status', 'email', 'role', 'last_login']
-        case 'Product': return ['status', 'price', 'stock', 'category']
-        case 'Order': return ['status', 'total', 'payment_status', 'shipping_status']
-        default: return []
-    }
-})
+const availableModels = ref([]);
+const availableFields = ref([]);
+
+onMounted(() => {
+  fetchModels();
+});
+
+const fetchModels = async () => {
+  try {
+    const response = await fetch('/api/models');
+    availableModels.value = await response.json();
+  } catch (error) {
+    console.error('Failed to fetch models:', error);
+  }
+};
+
+const fetchFields = async () => {
+  try {
+    const response = await fetch(`/api/models/${props.data.modelName}/fields`);
+    availableFields.value = await response.json();
+  } catch (error) {
+    console.error('Failed to fetch fields:', error);
+  }
+};
 
 defineOptions({
-    nodeMetadata: {
-        category: 'Events',
-        icon: BellIcon,
-        label: 'Model Events',
-        initialData: {
-            modelName: 'User',
-            eventType: 'updated',
-            watchFields: [],
-            outputKey: 'modelEvent',
-            outputValue: ''
-        }
-    }
-})
-
-defineEmits(['delete'])
+  nodeMetadata: {
+    category: 'Start',
+    icon: BellIcon,
+    label: 'Model Events',
+    initialData: {
+      modelName: '',
+      eventType: 'updated',
+      watchFields: [],
+      outputKey: 'modelEvent',
+      outputValue: '',
+      testMode: false
+    },
+  },
+});
 </script>

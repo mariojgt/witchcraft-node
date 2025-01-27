@@ -55,7 +55,7 @@ import { defineOptions } from 'vue'
 
 defineOptions({
     nodeMetadata: {
-        category: 'Data',
+        category: 'Start',
         icon: DatabaseIcon,
         label: 'Variable',
         initialData: {

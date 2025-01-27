@@ -289,13 +289,29 @@ async function saveDiagram() {
             edges: edges.value
         };
 
-        await DiagramService.store(diagramData);
+        if (currentDiagramId.value) {
+            // Update existing diagram
+            await DiagramService.update(currentDiagramId.value, diagramData);
+            alert('Diagram updated successfully');
+        } else {
+            // Create new diagram
+            const newDiagram = await DiagramService.store(diagramData);
+            currentDiagramId.value = newDiagram.id;
+            alert('Diagram created successfully');
+        }
+
+        // Refresh diagrams list
+        loadSavedDiagrams();
         showSaveDialog.value = false;
-        diagramName.value = '';
-        diagramDescription.value = '';
+
+        // Only clear form if it was a new diagram
+        if (!currentDiagramId.value) {
+            diagramName.value = '';
+            diagramDescription.value = '';
+        }
     } catch (error) {
         console.error('Failed to save diagram:', error);
-        alert('Failed to save diagram');
+        alert(`Failed to ${currentDiagramId.value ? 'update' : 'save'} diagram`);
     }
 }
 

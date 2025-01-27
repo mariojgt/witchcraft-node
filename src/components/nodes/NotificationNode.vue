@@ -39,6 +39,11 @@
             class="absolute top-1/2 -left-3 w-3 h-6 bg-gray-800 rounded-l-lg border-l-2 border-y-2 border-amber-500/50">
             <Handle type="target" position="left" />
         </div>
+        <div
+        class="absolute -bottom-3 left-1/2 transform -translate-x-1/2 h-3 w-6 bg-gray-800 rounded-b-lg border-b-2 border-x-2 border-red-500/50"
+      >
+        <Handle type="source" position="bottom" id="false" class="!bg-red-500" />
+      </div>
     </div>
 </template>
 
