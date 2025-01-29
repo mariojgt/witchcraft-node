@@ -4,7 +4,7 @@
       <div class="flex justify-between items-center mb-4 pb-2 border-b border-blue-500/30">
         <div class="flex items-center gap-2">
           <DatabaseIcon class="w-5 h-5 text-blue-400" />
-          <h3 class="font-bold text-blue-400">Variable</h3>
+          <h3 class="font-bold text-blue-400">Trigger</h3>
         </div>
         <button @click="$emit('delete')" class="hover:bg-red-500/20 p-1 rounded transition-colors">
           <XIcon class="w-4 h-4 text-red-400" />
@@ -55,9 +55,9 @@ import { defineOptions } from 'vue'
 
 defineOptions({
     nodeMetadata: {
-        category: 'Start',
+        category: 'Trigger',
         icon: DatabaseIcon,
-        label: 'Variable',
+        label: 'Trigger',
         initialData: {
             variableName: 'userStatus',
             initialValue: 'active',

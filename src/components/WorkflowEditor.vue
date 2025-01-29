@@ -260,20 +260,6 @@ simulationService.onVariablesChange = (variables) => {
     simulationState.variables = { ...variables };
 };
 
-// Load Node Components
-onMounted(async () => {
-    const nodeFiles = import.meta.glob('./nodes/*.vue');
-    for (const path in nodeFiles) {
-        const fileName = path.split('/').pop().replace('.vue', '');
-        const nodeType = fileName.toLowerCase().replace('node', '');
-        const module = await nodeFiles[path]();
-        nodeComponents[nodeType] = markRaw(module.default);
-    }
-
-    // Load saved diagrams
-    await loadSavedDiagrams();
-});
-
 // Diagram Management Functions
 async function saveDiagram() {
     if (!diagramName.value.trim()) {
@@ -445,6 +431,42 @@ function importFlow() {
     };
     input.click();
 }
+
+// Load Node Components
+onMounted(async () => {
+    try {
+        // Load both default and custom components
+        const defaultNodeFiles = import.meta.glob('./nodes/*.vue');
+        const customNodeFiles = import.meta.glob('/resources/js/witchcraft/nodes/*.vue');
+
+        // Load default components
+        for (const path in defaultNodeFiles) {
+            const fileName = path.split('/').pop().replace('.vue', '');
+            const nodeType = fileName.toLowerCase().replace('node', '');
+            const module = await defaultNodeFiles[path]();
+            nodeComponents[nodeType] = markRaw(module.default);
+        }
+
+        // Load custom components
+        const response = await fetch('/api/witchcraft/nodes');
+        const customNodes = await response.json();
+
+        for (const node of customNodes) {
+            const componentName = `${node.component}`;
+            const componentPath = `/resources/js/witchcraft/nodes/${componentName}.vue`;
+            if (customNodeFiles[componentPath]) {
+                const module = await customNodeFiles[componentPath]();
+                console.log(module);
+                nodeComponents[node.type] = markRaw(module.default);
+            }
+        }
+
+        // Load saved diagrams
+        await loadSavedDiagrams();
+    } catch (error) {
+        console.error('Failed to load nodes:', error);
+    }
+});
 </script>
 
 <style>

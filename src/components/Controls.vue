@@ -3,6 +3,45 @@
     <Panel position="top-right">
         <div class="bg-gray-800 p-3 rounded-lg shadow-lg">
             <div class="space-y-2">
+
+
+            <!-- Controls.vue -->
+            <!-- Action buttons -->
+            <div class="mt-4 flex flex-col gap-2">
+                <button @click="$emit('simulate')"
+                    class="bg-blue-700 hover:bg-blue-600 text-white px-4 py-2 rounded-md transition-colors flex items-center gap-2 w-full justify-center">
+                    <PlayIcon class="w-5 h-5" />
+                    Simulate Flow
+                </button>
+
+                <!-- Import/Export buttons -->
+                <div class="flex gap-2">
+                    <button @click="$emit('export')"
+                        class="bg-green-700 hover:bg-green-600 text-white px-4 py-2 rounded-md transition-colors flex items-center gap-2 flex-1 justify-center">
+                        <DownloadIcon class="w-5 h-5" />
+                        Export
+                    </button>
+                    <button @click="$emit('import')"
+                        class="bg-yellow-700 hover:bg-yellow-600 text-white px-4 py-2 rounded-md transition-colors flex items-center gap-2 flex-1 justify-center">
+                        <UploadIcon class="w-5 h-5" />
+                        Import
+                    </button>
+                </div>
+
+                <!-- Utility buttons -->
+                <div class="flex gap-2">
+                    <button @click="$emit('toggle-logs')"
+                        class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-md transition-colors flex items-center gap-2 flex-1 justify-center">
+                        <ListIcon class="w-5 h-5" />
+                        Toggle Logs
+                    </button>
+                    <button @click="$emit('clear')"
+                        class="bg-red-700 hover:bg-red-600 text-white px-4 py-2 rounded-md transition-colors flex items-center gap-2 flex-1 justify-center">
+                        <TrashIcon class="w-5 h-5" />
+                        Clear Log
+                    </button>
+                </div>
+            </div>
                 <!-- Add Save/Load buttons to the top -->
                 <div class="flex gap-2 mb-4">
                     <button @click="$emit('save')"
@@ -36,46 +75,8 @@
                     </div>
                 </div>
             </div>
-
-<!-- Controls.vue -->
-<!-- Action buttons -->
-<div class="mt-4 flex flex-col gap-2">
-    <button @click="$emit('simulate')"
-        class="bg-blue-700 hover:bg-blue-600 text-white px-4 py-2 rounded-md transition-colors flex items-center gap-2 w-full justify-center">
-        <PlayIcon class="w-5 h-5" />
-        Simulate Flow
-    </button>
-
-    <!-- Import/Export buttons -->
-    <div class="flex gap-2">
-        <button @click="$emit('export')"
-            class="bg-green-700 hover:bg-green-600 text-white px-4 py-2 rounded-md transition-colors flex items-center gap-2 flex-1 justify-center">
-            <DownloadIcon class="w-5 h-5" />
-            Export
-        </button>
-        <button @click="$emit('import')"
-            class="bg-yellow-700 hover:bg-yellow-600 text-white px-4 py-2 rounded-md transition-colors flex items-center gap-2 flex-1 justify-center">
-            <UploadIcon class="w-5 h-5" />
-            Import
-        </button>
-    </div>
-
-    <!-- Utility buttons -->
-    <div class="flex gap-2">
-        <button @click="$emit('toggle-logs')"
-            class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-md transition-colors flex items-center gap-2 flex-1 justify-center">
-            <ListIcon class="w-5 h-5" />
-            Toggle Logs
-        </button>
-        <button @click="$emit('clear')"
-            class="bg-red-700 hover:bg-red-600 text-white px-4 py-2 rounded-md transition-colors flex items-center gap-2 flex-1 justify-center">
-            <TrashIcon class="w-5 h-5" />
-            Clear Log
-        </button>
-    </div>
-</div>
-</div>
-</Panel>
+        </div>
+    </Panel>
 </template>
 
 <script setup>
@@ -107,27 +108,54 @@ defineEmits([
 ])
 
 onMounted(async () => {
-    for (const path in nodeFiles) {
-        const fileName = path.split('/').pop().replace('Node.vue', '')
-        const nodeType = fileName.toLowerCase()
-        const module = await nodeFiles[path]()
-        const metadata = module.default?.nodeMetadata || module.nodeMetadata || {
-            category: 'Other',
-            icon: null,
-            label: nodeType.replace(/^\w/, c => c.toUpperCase()),
-            initialData: { label: 'New Node' }
+    try {
+        // Load both default nodes and custom nodes
+        const defaultNodeFiles = import.meta.glob('./nodes/*.vue');
+        const customNodeFiles = import.meta.glob('/resources/js/witchcraft/nodes/*.vue');
+
+        // Fetch available nodes metadata from backend
+        const response = await fetch('/api/witchcraft/nodes');
+        const customNodes = await response.json();
+
+        // Process default nodes
+        for (const path in defaultNodeFiles) {
+            const fileName = path.split('/').pop().replace('Node.vue', '');
+            const nodeType = fileName.toLowerCase();
+            const module = await defaultNodeFiles[path]();
+
+            nodeTypes.push({
+                id: nodeType,
+                ...(module.default?.nodeMetadata || module.nodeMetadata || {
+                    category: 'Other',
+                    icon: null,
+                    label: nodeType.replace(/^\w/, c => c.toUpperCase()),
+                    initialData: { label: 'New Node' }
+                })
+            });
         }
-        nodeTypes.push({
-            id: nodeType,
-            ...metadata
-        })
+
+        // Add custom nodes
+        for (const node of customNodes) {
+            const componentPath = `/resources/js/witchcraft/nodes/${node.component}.vue`;
+            if (customNodeFiles[componentPath]) {
+                nodeTypes.push({
+                    id: node.type,
+                    ...node
+                });
+            }
+        }
+
+        // Set up categories
+        const categories = nodeTypes.reduce((cats, node) => {
+            cats[node.category] = true;
+            return cats;
+        }, {});
+        Object.assign(expandedCategories, categories);
+
+    } catch (error) {
+        console.error('Failed to load nodes:', error);
     }
-    const categories = nodeTypes.reduce((cats, node) => {
-        cats[node.category] = true
-        return cats
-    }, {})
-    Object.assign(expandedCategories, categories)
-})
+});
 
 const categorizedNodes = computed(() => {
     return nodeTypes.reduce((categories, node) => {
