@@ -105,6 +105,7 @@
                  :class="{ 'simulation-mode': simulationState.isRunning }"
                  @connect="onConnect"
                  @dragover.prevent
+                 @node-double-click="onNodeDoubleClick"
                  @drop="onDrop">
 
             <!-- Controls -->
@@ -215,7 +216,7 @@ const simulationService = new SimulationService();
 const nodes = ref([]);
 const edges = ref([]);
 const nodeComponents = reactive({});
-const { addEdges, removeNodes, addNodes, toObject } = useVueFlow();
+const { addEdges, removeNodes, addNodes, toObject, removeEdges } = useVueFlow();
 
 // Simulation State
 const showLogs = ref(true);
@@ -304,6 +305,16 @@ async function saveDiagram() {
 // Flow Management Functions
 function onConnect(params) {
     addEdges([params]);
+}
+
+function onNodeDoubleClick(event) {
+    const node = event.node;
+
+    // now find the edge where i clicked and remove it
+    const edge = edges.value.find(edge => edge.source === node.id || edge.target === node.id);
+    if (edge) {
+        removeEdges([edge]);
+    }
 }
 
 function removeNode(nodeId) {
