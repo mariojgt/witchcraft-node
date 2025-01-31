@@ -122,7 +122,7 @@ onMounted(async () => {
             const fileName = path.split('/').pop().replace('Node.vue', '');
             const nodeType = fileName.toLowerCase();
             const module = await defaultNodeFiles[path]();
-
+            console.log(defaultNodeFiles, path);
             nodeTypes.push({
                 id: nodeType,
                 ...(module.default?.nodeMetadata || module.nodeMetadata || {

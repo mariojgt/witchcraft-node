@@ -103,9 +103,13 @@ export default class SimulationService {
             // Process next nodes...
             const outgoingEdges = edges.filter(edge => edge.source === node.id);
             for (const edge of outgoingEdges) {
+
                 if (node.type === 'if') {
                     const shouldFollow = edge.sourceHandle === (result.conditionResult ? 'true' : 'false');
                     if (!shouldFollow) continue;
+                } else if (node.type === 'switchcase') {
+                    const selectedCase = result.selectedCase;
+                    if (edge.sourceHandle !== String(selectedCase)) continue;
                 }
 
                 const nextNode = allNodes.find(n => n.id === edge.target);
